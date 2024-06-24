@@ -1,4 +1,43 @@
 #!/usr/bin/make -f
 
+#export DH_VERBOSE = 1
+export DEB_BUILD_MAINT_OPTIONS=hardening=+all,+bindnow
+include /usr/share/dpkg/pkg-info.mk
+
+DPKG_EXPORT_BUILDFLAGS = 1
+include /usr/share/dpkg/buildflags.mk
+CFLAGS+=$(CPPFLAGS)
+CXXFLAGS+=$(CPPFLAGS)
+
+UPSTREAM_VERSION = $(shell echo $(DEB_VERSION_UPSTREAM) | sed -e 's/\+.*//')
+include /usr/share/dpkg/architecture.mk
+
+# Testsuite started to fail on mips64el, possibly related to switch
+# from GCC-10 to GCC-11. Tested that both -O1 and -O3 optimization
+# worked. -O2 was successful only when disabling inline functions.
+# See bug #1000953
+ifeq ($(DEB_HOST_ARCH),mips64el)
+	export DEB_CFLAGS_MAINT_APPEND = -O1
+endif
+
 %:
 	dh $@
+
+override_dh_auto_configure:
+	dh_auto_configure -- \
+	-DCMAKE_BINARY_DIR=debian/tmp \
+	-DCMAKE_BUILD_TYPE=RelWithDebInfo \
+	-DDEACTIVATE_AVX2=ON \
+	-DDEACTIVATE_AVX512=ON \
+	-DPREFER_EXTERNAL_LZ4=ON \
+	-DPREFER_EXTERNAL_ZSTD=ON \
+	-DPREFER_EXTERNAL_ZLIB=ON
+
+override_dh_makeshlibs:
+	dh_makeshlibs -- -v$(UPSTREAM_VERSION) -c0
+
+override_dh_auto_test:
+	dh_auto_test -- ARGS=--verbose --jobs=1
+
+override_dh_installchangelogs:
+	dh_installchangelogs RELEASE_NOTES.md

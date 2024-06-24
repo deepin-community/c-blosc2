@@ -1,5 +1,94 @@
-template-repository (1.0-1) unstable; urgency=medium
+c-blosc2 (2.14.4+ds-2) unstable; urgency=medium
 
-  * Initial release
+  * Upload to unstable.
 
- -- Tsic404 <liuheng@deepin.org>  Sat, 28 Jan 2023 13:46:49 +0800
+ -- Antonio Valentino <antonio.valentino@tiscali.it>  Sat, 01 Jun 2024 11:14:40 +0000
+
+c-blosc2 (2.14.4+ds-1) experimental; urgency=medium
+
+  [ Michael R. Crusoe ]
+  * New upstream version
+  * Removed two patches applied upstream: 0002-Fixes-for-CVE-2024-3204-
+    and-CVE-2024-3203.patch and 0004-Fix-bus-error-on-armhf.patch
+
+  [ Antonio Valentino ]
+  * debian/patches:
+    - Renumber remaining patches.
+  * Update d/copyright.
+  * Update symbol file.
+  * SO version bump.
+
+ -- Antonio Valentino <antonio.valentino@tiscali.it>  Sat, 25 May 2024 20:10:17 +0000
+
+c-blosc2 (2.13.1+ds-5) unstable; urgency=medium
+
+  * debian/patches:
+    - New 0004-Fix-bus-error-on-armhf.patch (Closes: #1063358).
+
+ -- Antonio Valentino <antonio.valentino@tiscali.it>  Fri, 10 May 2024 14:03:12 +0000
+
+c-blosc2 (2.13.1+ds-4) unstable; urgency=medium
+
+  * debian/patches:
+    - New 0003-Missing-headers.patch (Closes: #1070747).
+
+ -- Antonio Valentino <antonio.valentino@tiscali.it>  Fri, 10 May 2024 07:53:21 +0000
+
+c-blosc2 (2.13.1+ds-3) unstable; urgency=medium
+
+  * debian/patches:
+    - New Fixes-for-CVE-2024-3204-and-CVE-2024-3203,
+      for fixing two critical security issues.
+      Backported from upstream
+      https://github.com/Blosc/c-blosc2/commit/892f6d9c.
+  * Rely on pre-initialized dpkg-architecture variables.
+  * Drop changes in experimental and upload a security fix
+    to unstable.
+
+ -- Antonio Valentino <antonio.valentino@tiscali.it>  Sat, 06 Apr 2024 15:56:04 +0000
+
+c-blosc2 (2.13.1+ds-2) experimental; urgency=medium
+
+  * Update symbol file.
+
+ -- Antonio Valentino <antonio.valentino@tiscali.it>  Sat, 03 Feb 2024 08:19:10 +0000
+
+c-blosc2 (2.13.1+ds-1.1) unstable; urgency=medium
+
+  * Non-maintainer upload.
+  * Rename libraries for 64-bit time_t transition.  Closes: #1062033
+
+ -- Steve Langasek <vorlon@debian.org>  Wed, 28 Feb 2024 05:33:18 +0000
+
+c-blosc2 (2.13.1+ds-1) unstable; urgency=medium
+
+  * New upstream release.
+
+ -- Antonio Valentino <antonio.valentino@tiscali.it>  Sat, 27 Jan 2024 12:02:41 +0000
+
+c-blosc2 (2.12.0+ds-2) unstable; urgency=medium
+
+  * Update dates in d/copyright.
+  * debian/control:
+    - Remove unneeded dependency on libgrok-dev.
+
+ -- Antonio Valentino <antonio.valentino@tiscali.it>  Sat, 20 Jan 2024 10:52:13 +0000
+
+c-blosc2 (2.12.0+ds-1) unstable; urgency=medium
+
+  * New upstream release.
+  * Update symbol file.
+  * Update the d/copyright file.
+  * debian/patches:
+    - Refresh all patches.
+  * debian/control:
+    - Add build dependency on libgrok-dev.
+  * Upload to unstable.
+
+ -- Antonio Valentino <antonio.valentino@tiscali.it>  Sat, 30 Dec 2023 14:39:17 +0000
+
+c-blosc2 (2.11.2+ds-1~exp1) experimental; urgency=medium
+
+  * Initial release (Closes: #1038443).
+
+ -- Antonio Valentino <antonio.valentino@tiscali.it>  Sun, 18 Jun 2023 15:16:54 +0000
