@@ -1,0 +1,22 @@
+From: Antonio Valentino <antonio.valentino@tiscali.it>
+Date: Fri, 10 May 2024 07:47:18 +0000
+Subject: Missing headers
+
+Origin: https://github.com/Blosc/c-blosc2/commit/8ab3ef606163863de1b0886e2adcc8baec3d34d6
+Forwarded: https://github.com/Blosc/c-blosc2/issues/605
+---
+ blosc/bitshuffle-altivec.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/blosc/bitshuffle-altivec.c b/blosc/bitshuffle-altivec.c
+index b73a24c..992911c 100644
+--- a/blosc/bitshuffle-altivec.c
++++ b/blosc/bitshuffle-altivec.c
+@@ -33,6 +33,7 @@
+ #include <altivec.h>
+ 
+ #include <stdint.h>
++#include <stdlib.h>
+ 
+ /* The next is useful for debugging purposes */
+ #if 0

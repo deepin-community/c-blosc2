@@ -1,0 +1,6 @@
+version=4
+opts="\
+    filenamemangle=s/.+\/v?(\d\S+)\.tar\.gz/@PACKAGE@-$1\.tar\.gz/, \
+    dversionmangle=auto, \
+    repacksuffix=+ds" \
+https://github.com/Blosc/@PACKAGE@/tags .*/v?@ANY_VERSION@@ARCHIVE_EXT@

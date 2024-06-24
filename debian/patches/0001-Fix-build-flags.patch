@@ -1,0 +1,26 @@
+From: Antonio Valentino <antonio.valentino@tiscali.it>
+Date: Sat, 11 Nov 2023 17:47:55 +0000
+Subject: Fix build flags
+
+Forwarded: not-needed
+---
+ CMakeLists.txt | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 9f1c011..87a6998 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -74,6 +74,12 @@
+ #    LIB: includes blosc2.so
+ #    DEV: static includes blosc2.a and blosc2.h
+ 
++set(CMAKE_C_FLAGS "$ENV{CPPFLAGS} $ENV{CFLAGS} ${CMAKE_C_FLAGS}")
++set(CMAKE_CXX_FLAGS "$ENV{CPPFLAGS} $ENV{CXXFLAGS} ${CMAKE_CXX_FLAGS}")
++
++message(STATUS "CMAKE_C_FLAGS:   ${CMAKE_C_FLAGS}")
++message(STATUS "CMAKE_CXX_FLAGS: ${CMAKE_CXX_FLAGS}")
++
+ if(NOT WIN32)
+   set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=gnu99")
+ endif()
