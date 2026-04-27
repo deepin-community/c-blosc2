@@ -41,6 +41,7 @@ Constructors
 .. doxygenfunction:: b2nd_uninit
 .. doxygenfunction:: b2nd_empty
 .. doxygenfunction:: b2nd_zeros
+.. doxygenfunction:: b2nd_nans
 .. doxygenfunction:: b2nd_full
 
 From/To buffer
@@ -108,3 +109,4 @@ Utilities
 These functions may be used for working with plain C buffers representing multidimensional arrays.
 
 .. doxygenfunction:: b2nd_copy_buffer
+.. doxygenfunction:: b2nd_copy_buffer2

@@ -24,9 +24,10 @@
 
 #include "bitshuffle-altivec.h"
 #include "bitshuffle-generic.h"
+#include <stdlib.h>
 
 /* Make sure ALTIVEC is available for the compilation target and compiler. */
-#if defined(__ALTIVEC__)
+#if defined(__ALTIVEC__) && defined(__VSX__) && defined(_ARCH_PWR8)
 
 #include "transpose-altivec.h"
 
@@ -591,4 +592,23 @@ int64_t bshuf_untrans_bit_elem_altivec(const void* in, void* out, const size_t s
   return count;
 }
 
-#endif /* defined(__ALTIVEC__) */
+
+const bool is_bshuf_altivec = true;
+
+#else /* defined(__ALTIVEC__) && defined(__VSX__) && defined(_ARCH_PWR8) */
+
+const bool is_bshuf_altivec = false;
+
+int64_t
+bshuf_trans_bit_elem_altivec(const void* in, void* out, const size_t size,
+                             const size_t elem_size) {
+  abort();
+}
+
+int64_t
+bshuf_untrans_bit_elem_altivec(const void* in, void* out, const size_t size,
+                               const size_t elem_size) {
+  abort();
+}
+
+#endif /* defined(__ALTIVEC__) && defined(__VSX__) && defined(_ARCH_PWR8) */

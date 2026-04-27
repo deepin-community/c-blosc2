@@ -1,6 +1,102 @@
 Release notes for C-Blosc2
 ==========================
 
+Changes from 2.17.0 to 2.17.1
+=============================
+
+Several fixes affecting uninitialized memory access and others:
+
+* Fix uninitialized memory access in newly added unshuffle12_sse2 and unshuffle12_avx2 functions
+* Fix unaligned access in _sw32 and sw32_
+* Fix DWORD being printed as %s in sprintf call
+* Fix warning on unused variable (since this variable was only being used in the linux branch)
+* `splitmode` variable was uninitialized if goto was triggered
+
+See PR #658.  Many thanks to @EmilDohne for this nice job.
+
+
+Changes from 2.16.0 to 2.17.0
+=============================
+
+* New b2nd_copy_buffer2() function for copying buffers with typesizes
+  larger than 255.  The previous b2nd_copy_buffer() function is now
+  deprecated and will be removed in a future release.
+
+* Support repeated values larger than 8-bit, also for n-dim arrays.
+  This is useful for compressing arrays with large runs of repeated
+  values, like in the case of images with large areas of the same color.
+
+* Fix a leak in the pthreads emulation for Windows.  Fixes #647.
+  Thanks to @jocbeh for the report and fix (#655).
+
+* Update zstd to 1.5.7.  Thanks to Tom Birch.
+
+* Add BLOSC2_MAXTYPESIZE constant.
+
+### Deprecated Functions
+
+- `int b2nd_copy_buffer(...)` is deprecated and will be removed in
+  a future release. Please use `b2nd_copy_buffer2(...)` instead.
+
+
+Changes from 2.15.2 to 2.16.0
+=============================
+
+* Use _fseeki64/_ftelli64/_stat64 on Windows for large file (>2 GB) support.
+  Thanks to Abhi Jaiantilal (@ajaiantilal) for the report and help.
+* Add 12-byte unshuffle for avx2. Thanks to Tom Birch (@froody).
+* Add 12-byte sse2 unshuffle implementation. Thanks to Tom Birch (@froody).
+* Better description of the Blosc2 format as a whole.
+
+
+Changes from 2.15.1 to 2.15.2
+=============================
+
+* Support wasm32 by disabling ZLIB WITH_OPTIM option. Thanks to Miles Granger.
+
+* Avoid rip-relative addressing for OSX x86_64. Thanks to Miles Granger.
+
+* Added support for nvcc (NVidia Cuda Compiler) in CMake. Thanks to @dqwu.
+
+* Fix public include directories for blosc2 targets. Thanks to Dmitry Mikushin.
+
+* Fix ub in shuffle and unshuffle by marking _dst non-const. Thanks to Emil Dohne.
+
+
+Changes from 2.15.0 to 2.15.1
+=============================
+
+* Do not pass `-m` flags when compiling `shuffle.c`. This prevents the
+  compiler from incidentally optimizing the code called independently
+  of the runtime CPU check to these instruction sets, effectively
+  causing `SIGILL` on other CPUs.  Fixes #621.  Thanks to @t20100 and @mgorny.
+
+* Internal LZ4 sources bumped to 1.10.0.
+
+* Allow direct loading of plugins by name, without relying on
+  the presence of python. Thanks to @boxerab.
+
+* Add `b2nd_nans` method (PR #624). Thanks to @waynegm.
+
+
+Changes from 2.14.4 to 2.15.0
+=============================
+
+* Removed some duplicated functions. See https://github.com/Blosc/c-blosc2/issues/503.
+
+* Added a new io mode to memory map files. This forced to change the `io_cb` read API.
+  See https://github.com/Blosc/c-blosc2/blob/main/tests/test_mmap.c to see an example on
+  how to use it.
+
+* Updated the `SOVERSION` to 4 due to the API change in `io_cb` read.
+
+* Added functions to get cparams, dparams, storage and io defaults respectively.
+
+* Internal zstd sources updated to 1.5.6.
+
+* Fixed a bug when setting a slice using prefilters.
+
+
 Changes from 2.14.3 to 2.14.4
 =============================
 

@@ -23,30 +23,6 @@
 
 #include <stdint.h>
 
-/* Toggle hardware-accelerated routines based on SHUFFLE_*_ENABLED macros
-   and availability on the target architecture.
-*/
-#if defined(SHUFFLE_AVX512_ENABLED) && defined(__AVX512F__) && defined (__AVX512BW__)
-#define SHUFFLE_USE_AVX512
-#define SHUFFLE_USE_AVX512
-#endif
-
-#if defined(SHUFFLE_AVX2_ENABLED) && defined(__AVX2__)
-#define SHUFFLE_USE_AVX2
-#endif
-
-#if defined(SHUFFLE_SSE2_ENABLED) && defined(__SSE2__)
-#define SHUFFLE_USE_SSE2
-#endif
-
-#if defined(SHUFFLE_ALTIVEC_ENABLED) && defined(__ALTIVEC__)
-#define SHUFFLE_USE_ALTIVEC
-#endif
-
-#if defined(SHUFFLE_NEON_ENABLED) && defined(__ARM_NEON)
-#define SHUFFLE_USE_NEON
-#endif
-
 /**
   Primary shuffle and bitshuffle routines.
   This function dynamically dispatches to the appropriate hardware-accelerated
@@ -59,11 +35,11 @@
 */
 BLOSC_NO_EXPORT void
     shuffle(const int32_t bytesoftype, const int32_t blocksize,
-            const uint8_t* _src, const uint8_t* _dest);
+            const uint8_t* _src, uint8_t* _dest);
 
 BLOSC_NO_EXPORT int32_t
     bitshuffle(const int32_t bytesoftype, const int32_t blocksize,
-               const uint8_t *_src, const uint8_t *_dest);
+               const uint8_t *_src, uint8_t *_dest);
 
 /**
   Primary unshuffle and bitunshuffle routine.
@@ -77,12 +53,12 @@ BLOSC_NO_EXPORT int32_t
 */
 BLOSC_NO_EXPORT void
     unshuffle(const int32_t bytesoftype, const int32_t blocksize,
-              const uint8_t* _src, const uint8_t* _dest);
+              const uint8_t* _src, uint8_t* _dest);
 
 
 BLOSC_NO_EXPORT int32_t
     bitunshuffle(const int32_t bytesoftype, const int32_t blocksize,
-                 const uint8_t *_src, const uint8_t *_dest,
+                 const uint8_t *_src, uint8_t *_dest,
                  const uint8_t format_version);
 
 #endif /* BLOSC_SHUFFLE_H */

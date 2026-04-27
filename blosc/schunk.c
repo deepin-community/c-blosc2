@@ -313,13 +313,26 @@ blosc2_schunk* blosc2_schunk_copy(blosc2_schunk *schunk, blosc2_storage *storage
 
 /* Open an existing super-chunk that is on-disk (no copy is made). */
 blosc2_schunk* blosc2_schunk_open_udio(const char* urlpath, const blosc2_io *udio) {
+  return blosc2_schunk_open_offset_udio(urlpath, 0, udio);
+}
+
+blosc2_schunk* blosc2_schunk_open_offset_udio(const char* urlpath, int64_t offset, const blosc2_io *udio) {
   if (urlpath == NULL) {
     BLOSC_TRACE_ERROR("You need to supply a urlpath.");
     return NULL;
   }
 
-  blosc2_frame_s* frame = frame_from_file_offset(urlpath, udio, 0);
+  blosc2_frame_s* frame = frame_from_file_offset(urlpath, udio, offset);
   if (frame == NULL) {
+    blosc2_io_cb *io_cb = blosc2_get_io_cb(udio->id);
+    if (io_cb == NULL) {
+        BLOSC_TRACE_ERROR("Error getting the input/output API");
+        return NULL;
+    }
+    int rc = io_cb->destroy(udio->params);
+    if (rc < 0) {
+      BLOSC_TRACE_ERROR("Cannot destroy the input/output object.");
+    }
     return NULL;
   }
   blosc2_schunk* schunk = frame_to_schunk(frame, false, udio);
@@ -338,24 +351,7 @@ blosc2_schunk* blosc2_schunk_open(const char* urlpath) {
 }
 
 blosc2_schunk* blosc2_schunk_open_offset(const char* urlpath, int64_t offset) {
-  if (urlpath == NULL) {
-    BLOSC_TRACE_ERROR("You need to supply a urlpath.");
-    return NULL;
-  }
-
-  blosc2_frame_s* frame = frame_from_file_offset(urlpath, &BLOSC2_IO_DEFAULTS, offset);
-  if (frame == NULL) {
-    return NULL;
-  }
-  blosc2_schunk* schunk = frame_to_schunk(frame, false, &BLOSC2_IO_DEFAULTS);
-
-  // Set the storage with proper defaults
-  size_t pathlen = strlen(urlpath);
-  schunk->storage->urlpath = malloc(pathlen + 1);
-  strcpy(schunk->storage->urlpath, urlpath);
-  schunk->storage->contiguous = !frame->sframe;
-
-  return schunk;
+  return blosc2_schunk_open_offset_udio(urlpath, offset, &BLOSC2_IO_DEFAULTS);
 }
 
 int64_t blosc2_schunk_to_buffer(blosc2_schunk* schunk, uint8_t** dest, bool* needs_free) {
@@ -401,7 +397,8 @@ int64_t frame_to_file(blosc2_frame_s* frame, const char* urlpath) {
     return BLOSC2_ERROR_PLUGIN_IO;
   }
   void* fp = io_cb->open(urlpath, "wb", frame->schunk->storage->io);
-  int64_t nitems = io_cb->write(frame->cframe, frame->len, 1, fp);
+  int64_t io_pos = 0;
+  int64_t nitems = io_cb->write(frame->cframe, frame->len, 1, io_pos, fp);
   io_cb->close(fp);
   return nitems * frame->len;
 }
@@ -415,18 +412,11 @@ int64_t append_frame_to_file(blosc2_frame_s* frame, const char* urlpath) {
         return BLOSC2_ERROR_PLUGIN_IO;
     }
     void* fp = io_cb->open(urlpath, "ab", frame->schunk->storage->io);
-    int64_t offset;
 
-# if (UNIX)
-    offset = io_cb->tell(fp);
-# else
-    io_cb->seek(fp, 0, SEEK_END);
-    offset = io_cb->tell(fp);
-# endif
-
-    io_cb->write(frame->cframe, frame->len, 1, fp);
+    int64_t io_pos = io_cb->size(fp);
+    io_cb->write(frame->cframe, frame->len, 1, io_pos, fp);
     io_cb->close(fp);
-    return offset;
+    return io_pos;
 }
 
 
@@ -521,6 +511,14 @@ int blosc2_schunk_free(blosc2_schunk *schunk) {
   }
 
   if (schunk->storage != NULL) {
+    blosc2_io_cb *io_cb = blosc2_get_io_cb(schunk->storage->io->id);
+    if (io_cb != NULL) {
+      int rc = io_cb->destroy(schunk->storage->io->params);
+      if (rc < 0) {
+        BLOSC_TRACE_ERROR("Could not free the I/O resources.");
+      }
+    }
+
     if (schunk->storage->urlpath != NULL) {
       free(schunk->storage->urlpath);
     }

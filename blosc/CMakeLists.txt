@@ -29,14 +29,16 @@ if(BUILD_SHARED)
     endif()
     set_target_properties(blosc2_shared PROPERTIES
         VERSION ${version_string}
-        SOVERSION 3  # Change this when an ABI change happens
+        SOVERSION 4  # Change this when an ABI change happens
     )
     target_compile_definitions(blosc2_shared PUBLIC BLOSC_SHARED_LIBRARY)
+    target_include_directories(blosc2_shared PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
     target_include_directories(blosc2_shared PUBLIC
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../include>
         $<INSTALL_INTERFACE:include>)
 endif()
 if(BUILD_STATIC)
+    add_compile_definitions(BUILD_STATIC)
     add_library(blosc2_static STATIC)
     # ALIAS for superbuilds that use Blosc2 as sub-project
     # must be the same as the NAMESPACE in Blosc2Targets
@@ -52,8 +54,9 @@ if(BUILD_STATIC)
     if(MSVC OR MINGW)
         set_target_properties(blosc2_static PROPERTIES PREFIX lib)
     endif()
+    target_include_directories(blosc2_static PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
     target_include_directories(blosc2_static PUBLIC
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../include>
         $<INSTALL_INTERFACE:include>)
 endif()
 # When the option has been selected to compile the test suite,
@@ -90,7 +93,7 @@ if(LZ4_FOUND)
         target_include_directories(blosc_testing PUBLIC ${LZ4_INCLUDE_DIR})
     endif()
 else()
-    set(LZ4_LOCAL_DIR ${INTERNAL_LIBS}/lz4-1.9.4)
+    set(LZ4_LOCAL_DIR ${INTERNAL_LIBS}/lz4-1.10.0)
     if(BUILD_SHARED)
         target_include_directories(blosc2_shared PRIVATE ${LZ4_LOCAL_DIR})
     endif()
@@ -152,7 +155,7 @@ if(NOT DEACTIVATE_ZSTD)
             target_link_libraries(blosc_testing PUBLIC ${ZSTD_LIBRARY})
         endif()
     else()
-        set(ZSTD_LOCAL_DIR ${INTERNAL_LIBS}/zstd-1.5.5)
+        set(ZSTD_LOCAL_DIR ${INTERNAL_LIBS}/zstd-1.5.7)
         if(BUILD_SHARED)
             target_include_directories(blosc2_shared PRIVATE ${ZSTD_LOCAL_DIR} ${ZSTD_LOCAL_DIR}/common)
         endif()
@@ -300,17 +303,11 @@ if(COMPILER_SUPPORT_SSE2)
             set_source_files_properties(
                     shuffle-sse2.c bitshuffle-sse2.c blosclz.c fastcopy.c
                     PROPERTIES COMPILE_OPTIONS "/arch:SSE2")
-            set_property(
-                    SOURCE shuffle.c
-                    APPEND PROPERTY COMPILE_OPTIONS "/arch:SSE2")
         endif()
     else()
         set_source_files_properties(
                 shuffle-sse2.c bitshuffle-sse2.c blosclz.c fastcopy.c
                 PROPERTIES COMPILE_OPTIONS -msse2)
-        set_property(
-                SOURCE shuffle.c
-                APPEND PROPERTY COMPILE_OPTIONS -msse2)
         # Add SIMD flags for the bytedelta filter and Intel (it seems that ARM64 does not need these)
         set_source_files_properties(
                 ${PROJECT_SOURCE_DIR}/plugins/filters/bytedelta/bytedelta.c
@@ -330,16 +327,10 @@ if(COMPILER_SUPPORT_AVX2)
         set_source_files_properties(
                 shuffle-avx2.c bitshuffle-avx2.c
                 PROPERTIES COMPILE_OPTIONS "/arch:AVX2")
-        set_property(
-                SOURCE shuffle.c
-                APPEND PROPERTY COMPILE_OPTIONS "/arch:AVX2")
     else()
         set_source_files_properties(
                 shuffle-avx2.c bitshuffle-avx2.c
                 PROPERTIES COMPILE_OPTIONS -mavx2)
-        set_property(
-                SOURCE shuffle.c
-                APPEND PROPERTY COMPILE_OPTIONS -mavx2)
     endif()
 
     # Define a symbol for the shuffle-dispatch implementation
@@ -354,16 +345,10 @@ if(COMPILER_SUPPORT_AVX512)
         set_source_files_properties(
                 bitshuffle-avx512.c
 		PROPERTIES COMPILE_OPTIONS "/arch:AVX512")
-        set_property(
-                SOURCE shuffle.c
-		APPEND PROPERTY COMPILE_OPTIONS "/arch:AVX512")
     else()
         set_source_files_properties(
                 bitshuffle-avx512.c
                 PROPERTIES COMPILE_OPTIONS "-mavx512f;-mavx512bw")
-        set_property(
-                SOURCE shuffle.c
-                APPEND PROPERTY COMPILE_OPTIONS "-mavx512f;-mavx512bw")
     endif()
 
     # Define a symbol for the shuffle-dispatch implementation
@@ -377,17 +362,11 @@ if(COMPILER_SUPPORT_NEON)
     set_source_files_properties(
             shuffle-neon.c bitshuffle-neon.c
             PROPERTIES COMPILE_OPTIONS "-flax-vector-conversions")
-    set_property(
-            SOURCE shuffle.c
-            APPEND PROPERTY COMPILE_OPTIONS "-flax-vector-conversions")
     if(CMAKE_SYSTEM_PROCESSOR STREQUAL armv7l)
         # Only armv7l needs special -mfpu=neon flag; aarch64 doesn't.
       set_source_files_properties(
             shuffle-neon.c bitshuffle-neon.c
             PROPERTIES COMPILE_OPTIONS "-mfpu=neon;-flax-vector-conversions")
-      set_property(
-            SOURCE shuffle.c
-            APPEND PROPERTY COMPILE_OPTIONS "-mfpu=neon;-flax-vector-conversions")
     endif()
     # Define a symbol for the shuffle-dispatch implementation
     # so it knows NEON is supported even though that file is

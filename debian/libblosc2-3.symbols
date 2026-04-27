@@ -1,4 +1,4 @@
-# SymbolsHelper-Confirmed: 2.14.3 amd64
+# SymbolsHelper-Confirmed: 2.17.1 amd64
 libblosc2.so.3 #PACKAGE# #MINVER#
 * Build-Depends-Package: libblosc2-dev
  b2nd_append@Base 2.9.2

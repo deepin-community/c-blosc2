@@ -35,6 +35,13 @@ extern "C" {
 extern "C" {
 #endif
 
+#if defined(_MSC_VER)
+#define B2ND_DEPRECATED(msg) __declspec(deprecated(msg))
+#elif defined(__GNUC__) || defined(__clang__)
+#define B2ND_DEPRECATED(msg) __attribute__((deprecated(msg)))
+#else
+#define B2ND_DEPRECATED(msg)
+#endif
 
 /* The version for metalayer format; starts from 0 and it must not exceed 127 */
 #define B2ND_METALAYER_VERSION 0
@@ -191,6 +198,19 @@ BLOSC_EXPORT int b2nd_empty(b2nd_context_t *ctx, b2nd_array_t **array);
  * @return An error code.
  */
 BLOSC_EXPORT int b2nd_zeros(b2nd_context_t *ctx, b2nd_array_t **array);
+
+
+/**
+ * Create an array, with NaN being used as the default value for
+ * uninitialized portions of the array. Should only be used with type sizes
+ * of either 4 or 8. Other sizes generate an error.
+ *
+ * @param ctx The b2nd context for the new array.
+ * @param array The memory pointer where the array will be created.
+ *
+ * @return An error code.
+ */
+BLOSC_EXPORT int b2nd_nans(b2nd_context_t *ctx, b2nd_array_t **array);
 
 
 /**
@@ -526,78 +546,8 @@ BLOSC_EXPORT int b2nd_serialize_meta(int8_t ndim, const int64_t *shape, const in
  *
  * @return An error code.
  */
-static inline int b2nd_deserialize_meta(
-    const uint8_t *smeta, int32_t smeta_len, int8_t *ndim, int64_t *shape,
-    int32_t *chunkshape, int32_t *blockshape, char **dtype, int8_t *dtype_format) {
-    const uint8_t *pmeta = smeta;
-
-  // Check that we have an array with 7 entries (version, ndim, shape, chunkshape, blockshape, dtype_format, dtype)
-  pmeta += 1;
-
-  // version entry
-  // int8_t version = (int8_t)pmeta[0];  // positive fixnum (7-bit positive integer) commented to avoid warning
-  pmeta += 1;
-
-  // ndim entry
-  *ndim = (int8_t) pmeta[0];
-  int8_t ndim_aux = *ndim;  // positive fixnum (7-bit positive integer)
-  pmeta += 1;
-
-  // shape entry
-  // Initialize to ones, as required by b2nd
-  for (int i = 0; i < ndim_aux; i++) shape[i] = 1;
-  pmeta += 1;
-  for (int8_t i = 0; i < ndim_aux; i++) {
-    pmeta += 1;
-    swap_store(shape + i, pmeta, sizeof(int64_t));
-    pmeta += sizeof(int64_t);
-  }
-
-  // chunkshape entry
-  // Initialize to ones, as required by b2nd
-  for (int i = 0; i < ndim_aux; i++) chunkshape[i] = 1;
-  pmeta += 1;
-  for (int8_t i = 0; i < ndim_aux; i++) {
-    pmeta += 1;
-    swap_store(chunkshape + i, pmeta, sizeof(int32_t));
-    pmeta += sizeof(int32_t);
-  }
-
-  // blockshape entry
-  // Initialize to ones, as required by b2nd
-  for (int i = 0; i < ndim_aux; i++) blockshape[i] = 1;
-  pmeta += 1;
-  for (int8_t i = 0; i < ndim_aux; i++) {
-    pmeta += 1;
-    swap_store(blockshape + i, pmeta, sizeof(int32_t));
-    pmeta += sizeof(int32_t);
-  }
-
-  // dtype entry
-  if (pmeta - smeta < smeta_len) {
-    // dtype info is here
-    *dtype_format = (int8_t) *(pmeta++);
-    pmeta += 1;
-    int dtype_len;
-    swap_store(&dtype_len, pmeta, sizeof(int32_t));
-    pmeta += sizeof(int32_t);
-    *dtype = (char*)malloc(dtype_len + 1);
-    char* dtype_ = *dtype;
-    memcpy(dtype_, (char*)pmeta, dtype_len);
-    dtype_[dtype_len] = '\0';
-    pmeta += dtype_len;
-  }
-  else {
-    // dtype is mandatory in b2nd metalayer, but this is mainly meant as
-    // a fall-back for deprecated caterva headers
-    *dtype = NULL;
-    *dtype_format = 0;
-  }
-
-  int32_t slen = (int32_t) (pmeta - smeta);
-  return (int)slen;
-}
-
+BLOSC_EXPORT int b2nd_deserialize_meta(const uint8_t *smeta, int32_t smeta_len, int8_t *ndim, int64_t *shape,
+                                       int32_t *chunkshape, int32_t *blockshape, char **dtype, int8_t *dtype_format);
 
 // Utilities for C buffers representing multidimensional arrays
 
@@ -619,16 +569,53 @@ static inline int b2nd_deserialize_meta(
  *
  * @return An error code.
  *
+ * @note This is kept for backward compatibility with existing code out there.  New code should use
+ * b2nd_copy_buffer2 instead.
+ *
  * @note Please make sure that slice boundaries fit within the source and
  * destination arrays before using this function, as it does not perform these
  * checks itself.
  */
+B2ND_DEPRECATED("Use b2nd_copy_buffer2 instead.")
 BLOSC_EXPORT int b2nd_copy_buffer(int8_t ndim,
                                   uint8_t itemsize,
                                   const void *src, const int64_t *src_pad_shape,
                                   const int64_t *src_start, const int64_t *src_stop,
                                   void *dst, const int64_t *dst_pad_shape,
                                   const int64_t *dst_start);
+
+/**
+ * @brief Copy a slice of a source array into another array. The arrays have
+ * the same number of dimensions (though their shapes may differ), the same
+ * item size, and they are stored as C buffers with contiguous data (any
+ * padding is considered part of the array).
+ *
+ * @param ndim The number of dimensions in both arrays.
+ * @param itemsize The size of the individual data item in both arrays.
+ * @param src The buffer for getting the data from the source array.
+ * @param src_pad_shape The shape of the source array, including padding.
+ * @param src_start The source coordinates where the slice will begin.
+ * @param src_stop The source coordinates where the slice will end.
+ * @param dst The buffer for setting the data into the destination array.
+ * @param dst_pad_shape The shape of the destination array, including padding.
+ * @param dst_start The destination coordinates where the slice will be placed.
+ *
+ * @return An error code.
+ *
+ * @note This is a version of (now deprecated) b2nd_copy_buffer() that uses
+ * signed 32-bit integers for copying data. This is useful when data is stored
+ * in a buffer that uses itemsizes that are larger than 255 bytes.
+ *
+ * @note Please make sure that slice boundaries fit within the source and
+ * destination arrays before using this function, as it does not perform these
+ * checks itself.
+ */
+BLOSC_EXPORT int b2nd_copy_buffer2(int8_t ndim,
+                                   int32_t itemsize,
+                                   const void *src, const int64_t *src_pad_shape,
+                                   const int64_t *src_start, const int64_t *src_stop,
+                                   void *dst, const int64_t *dst_pad_shape,
+                                   const int64_t *dst_start);
 
 
 #ifdef __cplusplus

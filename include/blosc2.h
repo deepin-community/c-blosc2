@@ -82,11 +82,11 @@ extern "C" {
 
 /* Version numbers */
 #define BLOSC2_VERSION_MAJOR    2    /* for major interface/format changes  */
-#define BLOSC2_VERSION_MINOR    14   /* for minor interface/format changes  */
-#define BLOSC2_VERSION_RELEASE  4    /* for tweaks, bug-fixes, or development */
+#define BLOSC2_VERSION_MINOR    17   /* for minor interface/format changes  */
+#define BLOSC2_VERSION_RELEASE  1    /* for tweaks, bug-fixes, or development */
 
-#define BLOSC2_VERSION_STRING   "2.14.4"  /* string version.  Sync with above! */
-#define BLOSC2_VERSION_DATE     "$Date:: 2023-04-10 #$"    /* date version */
+#define BLOSC2_VERSION_STRING   "2.17.1"  /* string version.  Sync with above! */
+#define BLOSC2_VERSION_DATE     "$Date:: 2025-04-26 #$"    /* date version year-month-day */
 
 
 /* The maximum number of dimensions for Blosc2 NDim arrays */
@@ -108,12 +108,12 @@ extern "C" {
     do {                                            \
         if ((pointer) == NULL) {                    \
             BLOSC_TRACE_ERROR("Pointer is null");   \
-            return rc;                              \
+            return (rc);                            \
         }                                           \
     } while (0)
 #define BLOSC_ERROR(rc)                             \
     do {                                            \
-        int rc_ = rc;                               \
+        int rc_ = (rc);                             \
         if (rc_ < BLOSC2_ERROR_SUCCESS) {           \
             char *error_msg = print_error(rc_);     \
             BLOSC_TRACE_ERROR("%s", error_msg);     \
@@ -291,7 +291,8 @@ enum {
  */
 enum {
   BLOSC2_MAXDICTSIZE = 128 * 1024, //!< maximum size for compression dicts
-  BLOSC2_MAXBLOCKSIZE = 536866816  //!< maximum size for blocks
+  BLOSC2_MAXBLOCKSIZE = 536866816, //!< maximum size for blocks
+  BLOSC2_MAXTYPESIZE = BLOSC2_MAXBLOCKSIZE, //!< maximum size for types
 };
 
 
@@ -429,7 +430,7 @@ enum {
   BLOSC2_NO_SPECIAL = 0x0,       //!< no special value
   BLOSC2_SPECIAL_ZERO = 0x1,     //!< zero special value
   BLOSC2_SPECIAL_NAN = 0x2,      //!< NaN special value
-  BLOSC2_SPECIAL_VALUE = 0x3,    //!< generic special value
+  BLOSC2_SPECIAL_VALUE = 0x3,    //!< repeated special value
   BLOSC2_SPECIAL_UNINIT = 0x4,   //!< non initialized values
   BLOSC2_SPECIAL_LASTID = 0x4,   //!< last valid ID for special value (update this adequately)
   BLOSC2_SPECIAL_MASK = 0x7      //!< special value mask (prev IDs cannot be larger than this)
@@ -1024,7 +1025,8 @@ BLOSC_EXPORT const char* blosc2_cbuffer_complib(const void* cbuffer);
 
 enum {
   BLOSC2_IO_FILESYSTEM = 0,
-  BLOSC_IO_LAST_BLOSC_DEFINED = 1,  // sentinel
+  BLOSC2_IO_FILESYSTEM_MMAP = 1,
+  BLOSC_IO_LAST_BLOSC_DEFINED = 2,  // sentinel
   BLOSC_IO_LAST_REGISTERED = 32,  // sentinel
 };
 
@@ -1036,11 +1038,11 @@ enum {
 
 typedef void*   (*blosc2_open_cb)(const char *urlpath, const char *mode, void *params);
 typedef int     (*blosc2_close_cb)(void *stream);
-typedef int64_t (*blosc2_tell_cb)(void *stream);
-typedef int     (*blosc2_seek_cb)(void *stream, int64_t offset, int whence);
-typedef int64_t (*blosc2_write_cb)(const void *ptr, int64_t size, int64_t nitems, void *stream);
-typedef int64_t (*blosc2_read_cb)(void *ptr, int64_t size, int64_t nitems, void *stream);
+typedef int64_t (*blosc2_size_cb)(void *stream);
+typedef int64_t (*blosc2_write_cb)(const void *ptr, int64_t size, int64_t nitems, int64_t position, void *stream);
+typedef int64_t (*blosc2_read_cb)(void **ptr, int64_t size, int64_t nitems, int64_t position, void *stream);
 typedef int     (*blosc2_truncate_cb)(void *stream, int64_t size);
+typedef int     (*blosc2_destroy_cb)(void *params);
 
 
 /*
@@ -1051,20 +1053,23 @@ typedef struct {
   //!< The IO identifier.
   char* name;
   //!< The IO name.
+  bool is_allocation_necessary;
+  //!< If true, the caller needs to allocate data for the read function (ptr argument). If false, the read function
+  //!< takes care of memory allocation and stores the address in the allocated_ptr argument.
   blosc2_open_cb open;
   //!< The IO open callback.
   blosc2_close_cb close;
   //!< The IO close callback.
-  blosc2_tell_cb tell;
-  //!< The IO tell callback.
-  blosc2_seek_cb seek;
-  //!< The IO seek callback.
+  blosc2_size_cb size;
+  //!< The IO size callback.
   blosc2_write_cb write;
   //!< The IO write callback.
   blosc2_read_cb read;
   //!< The IO read callback.
   blosc2_truncate_cb truncate;
   //!< The IO truncate callback.
+  blosc2_destroy_cb destroy;
+  //!< The IO destroy callback (called in the end when finished with the schunk).
 } blosc2_io_cb;
 
 
@@ -1667,6 +1672,31 @@ typedef struct {
  */
 static const blosc2_storage BLOSC2_STORAGE_DEFAULTS = {false, NULL, NULL, NULL, NULL};
 
+/**
+ * @brief Get default struct for compression params meant for user initialization.
+ */
+BLOSC_EXPORT blosc2_cparams blosc2_get_blosc2_cparams_defaults(void);
+
+/**
+ * @brief Get default struct for decompression params meant for user initialization.
+ */
+BLOSC_EXPORT blosc2_dparams blosc2_get_blosc2_dparams_defaults(void);
+
+/**
+ * @brief Get default struct for #blosc2_storage meant for user initialization.
+ */
+BLOSC_EXPORT blosc2_storage blosc2_get_blosc2_storage_defaults(void);
+
+/**
+ * @brief Get default struct for #blosc2_io meant for user initialization.
+ */
+BLOSC_EXPORT blosc2_io blosc2_get_blosc2_io_defaults(void);
+
+/**
+ * @brief Get default struct for #blosc2_stdio_mmap meant for user initialization.
+ */
+BLOSC_EXPORT blosc2_stdio_mmap blosc2_get_blosc2_stdio_mmap_defaults(void);
+
 typedef struct blosc2_frame_s blosc2_frame;   /* opaque type */
 
 /**
@@ -1829,6 +1859,19 @@ BLOSC_EXPORT blosc2_schunk* blosc2_schunk_open_offset(const char* urlpath, int64
  * @return The new super-chunk.
  */
 BLOSC_EXPORT blosc2_schunk* blosc2_schunk_open_udio(const char* urlpath, const blosc2_io *udio);
+
+/**
+ * @brief Open an existing super-chunk (no copy is made) using a user-defined I/O interface.
+ *
+ * @param urlpath The file name.
+ *
+ * @param offset The frame offset.
+ *
+ * @param udio The user-defined I/O interface.
+ *
+ * @return The new super-chunk.
+ */
+BLOSC_EXPORT blosc2_schunk* blosc2_schunk_open_offset_udio(const char* urlpath, int64_t offset, const blosc2_io *udio);
 
 /* @brief Convert a super-chunk into a contiguous frame buffer.
  *

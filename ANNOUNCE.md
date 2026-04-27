@@ -1,23 +1,29 @@
-# Announcing C-Blosc2 2.14.4
+# Announcing C-Blosc2 2.17.1
 A fast, compressed and persistent binary data store library for C.
 
 ## What is new?
 
-This is a patch release where the `SOVERSION` was bumped since the API changed.
+Several fixes affecting uninitialized memory access and others:
 
-For more info, please see the release notes in:
+* Fix uninitialized memory access in newly added unshuffle12_sse2 and unshuffle12_avx2 functions
+* Fix unaligned access in _sw32 and sw32_
+* Fix DWORD being printed as %s in sprintf call
+* Fix warning on unused variable (since this variable was only being used in the linux branch)
+* `splitmode` variable was uninitialized if goto was triggered
+
+See PR #658.  Many thanks to @EmilDohne for this nice job.
+
+For more info, see the release notes in:
 
 https://github.com/Blosc/c-blosc2/blob/main/RELEASE_NOTES.md
-
-Also, there is blog post introducing the most relevant changes in Blosc2:
-
-https://www.blosc.org/posts/blosc2-ready-general-review/
 
 ## What is it?
 
 Blosc2 is a high performance data container optimized for binary data.
 It builds on the shoulders of Blosc, the high performance meta-compressor
-(https://github.com/Blosc/c-blosc).
+(https://github.com/Blosc/c-blosc).  Blosc2 is the next generation of Blosc,
+an award-winning (https://www.blosc.org/posts/prize-push-Blosc2)` library
+that has been around for more than a decade.
 
 Blosc2 expands the capabilities of Blosc by providing a higher lever
 container that is able to store many chunks on it (hence the super-block name).

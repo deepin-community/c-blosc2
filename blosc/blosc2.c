@@ -725,14 +725,30 @@ int read_chunk_header(const uint8_t* src, int32_t srcsize, bool extended_header,
 
     int32_t special_type = (header->blosc2_flags >> 4) & BLOSC2_SPECIAL_MASK;
     if (special_type != 0) {
-      if (header->nbytes % header->typesize != 0) {
-        BLOSC_TRACE_ERROR("`nbytes` is not a multiple of typesize");
-        return BLOSC2_ERROR_INVALID_HEADER;
-      }
       if (special_type == BLOSC2_SPECIAL_VALUE) {
-        if (header->cbytes < BLOSC_EXTENDED_HEADER_LENGTH + header->typesize) {
-          BLOSC_TRACE_ERROR("`cbytes` is too small for run length encoding");
-          return BLOSC2_ERROR_READ_BUFFER;
+        // In this case, the actual type size must be derived from the cbytes
+        int32_t typesize = header->cbytes - BLOSC_EXTENDED_HEADER_LENGTH;
+        if (typesize <= 0) {
+          BLOSC_TRACE_ERROR("`typesize` is zero or negative");
+          return BLOSC2_ERROR_INVALID_HEADER;
+        }
+        if (typesize > BLOSC2_MAXTYPESIZE) {
+          BLOSC_TRACE_ERROR("`typesize` is greater than maximum allowed");
+          return BLOSC2_ERROR_INVALID_HEADER;
+        }
+        if (typesize > header->nbytes) {
+          BLOSC_TRACE_ERROR("`typesize` is greater than `nbytes`");
+          return BLOSC2_ERROR_INVALID_HEADER;
+        }
+        if (header->nbytes % typesize != 0) {
+          BLOSC_TRACE_ERROR("`nbytes` is not a multiple of typesize");
+          return BLOSC2_ERROR_INVALID_HEADER;
+        }
+      }
+      else {
+        if (header->nbytes % header->typesize != 0) {
+          BLOSC_TRACE_ERROR("`nbytes` is not a multiple of typesize");
+          return BLOSC2_ERROR_INVALID_HEADER;
         }
       }
     }
@@ -1581,6 +1597,10 @@ static int blosc_d(
   if (rc < 0) {
     return rc;
   }
+  if (context->special_type == BLOSC2_SPECIAL_VALUE) {
+    // We need the actual typesize in this case, but it cannot be encoded in the header, so derive it from cbytes
+    typesize = chunk_cbytes - context->header_overhead;
+  }
 
   // In some situations (lazychunks) the context can arrive uninitialized
   // (but BITSHUFFLE needs it for accessing the format of the chunk)
@@ -1620,6 +1640,7 @@ static int blosc_d(
       return BLOSC2_ERROR_PLUGIN_IO;
     }
 
+    int64_t io_pos = 0;
     if (frame->sframe) {
       // The chunk is not in the frame
       char* chunkpath = malloc(strlen(frame->urlpath) + 1 + 8 + strlen(".chunk") + 1);
@@ -1629,16 +1650,16 @@ static int blosc_d(
       BLOSC_ERROR_NULL(fp, BLOSC2_ERROR_FILE_OPEN);
       free(chunkpath);
       // The offset of the block is src_offset
-      io_cb->seek(fp, src_offset, SEEK_SET);
+      io_pos = src_offset;
     }
     else {
       fp = io_cb->open(urlpath, "rb", context->schunk->storage->io->params);
       BLOSC_ERROR_NULL(fp, BLOSC2_ERROR_FILE_OPEN);
       // The offset of the block is src_offset
-      io_cb->seek(fp, frame->file_offset + chunk_offset + src_offset, SEEK_SET);
+      io_pos = frame->file_offset + chunk_offset + src_offset;
     }
     // We can make use of tmp3 because it will be used after src is not needed anymore
-    int64_t rbytes = io_cb->read(tmp3, 1, block_csize, fp);
+    int64_t rbytes = io_cb->read((void**)&tmp3, 1, block_csize, io_pos, fp);
     io_cb->close(fp);
     if ((int32_t)rbytes != block_csize) {
       BLOSC_TRACE_ERROR("Cannot read the (lazy) block out of the fileframe.");
@@ -1673,7 +1694,7 @@ static int blosc_d(
     switch (context->special_type) {
       case BLOSC2_SPECIAL_VALUE:
         // All repeated values
-        rc = set_values(context->typesize, context->src, _dest, bsize_);
+        rc = set_values(typesize, context->src, _dest, bsize_);
         if (rc < 0) {
           BLOSC_TRACE_ERROR("set_values failed");
           return BLOSC2_ERROR_DATA;
@@ -1748,7 +1769,7 @@ static int blosc_d(
 
   /* The number of compressed data streams for this block */
   if (!dont_split && !leftoverblock) {
-    nstreams = (int32_t)typesize;
+    nstreams = context->typesize;
   }
   else {
     nstreams = 1;
@@ -2159,7 +2180,7 @@ static int initialize_context_compression(
   context->output_bytes = 0;
   context->destsize = destsize;
   context->sourcesize = srcsize;
-  context->typesize = (int32_t)typesize;
+  context->typesize = typesize;
   context->filter_flags = filters_to_flags(filters);
   for (int i = 0; i < BLOSC2_MAX_FILTERS; i++) {
     context->filters[i] = filters[i];
@@ -2257,6 +2278,12 @@ static int initialize_context_compression(
   }
 
   /* Check typesize limits */
+  if (context->typesize > BLOSC2_MAXTYPESIZE) {
+    // If typesize is too large for Blosc2, return an error
+    BLOSC_TRACE_ERROR("Typesize cannot exceed %d bytes.", BLOSC2_MAXTYPESIZE);
+    return BLOSC2_ERROR_INVALID_PARAM;
+  }
+  /* Now, cap typesize so that blosc2 split machinery can continue to work */
   if (context->typesize > BLOSC_MAX_TYPESIZE) {
     /* If typesize is too large, treat buffer as an 1-byte stream. */
     context->typesize = 1;
@@ -3789,6 +3816,7 @@ void blosc_set_schunk(blosc2_schunk* schunk) {
 
 blosc2_io *blosc2_io_global = NULL;
 blosc2_io_cb BLOSC2_IO_CB_DEFAULTS;
+blosc2_io_cb BLOSC2_IO_CB_MMAP;
 
 void blosc2_init(void) {
   /* Return if Blosc is already initialized */
@@ -3796,13 +3824,25 @@ void blosc2_init(void) {
 
   BLOSC2_IO_CB_DEFAULTS.id = BLOSC2_IO_FILESYSTEM;
   BLOSC2_IO_CB_DEFAULTS.name = "filesystem";
+  BLOSC2_IO_CB_DEFAULTS.is_allocation_necessary = true;
   BLOSC2_IO_CB_DEFAULTS.open = (blosc2_open_cb) blosc2_stdio_open;
   BLOSC2_IO_CB_DEFAULTS.close = (blosc2_close_cb) blosc2_stdio_close;
-  BLOSC2_IO_CB_DEFAULTS.tell = (blosc2_tell_cb) blosc2_stdio_tell;
-  BLOSC2_IO_CB_DEFAULTS.seek = (blosc2_seek_cb) blosc2_stdio_seek;
+  BLOSC2_IO_CB_DEFAULTS.size = (blosc2_size_cb) blosc2_stdio_size;
   BLOSC2_IO_CB_DEFAULTS.write = (blosc2_write_cb) blosc2_stdio_write;
   BLOSC2_IO_CB_DEFAULTS.read = (blosc2_read_cb) blosc2_stdio_read;
   BLOSC2_IO_CB_DEFAULTS.truncate = (blosc2_truncate_cb) blosc2_stdio_truncate;
+  BLOSC2_IO_CB_DEFAULTS.destroy = (blosc2_destroy_cb) blosc2_stdio_destroy;
+
+  BLOSC2_IO_CB_MMAP.id = BLOSC2_IO_FILESYSTEM_MMAP;
+  BLOSC2_IO_CB_MMAP.name = "filesystem_mmap";
+  BLOSC2_IO_CB_MMAP.is_allocation_necessary = false;
+  BLOSC2_IO_CB_MMAP.open = (blosc2_open_cb) blosc2_stdio_mmap_open;
+  BLOSC2_IO_CB_MMAP.close = (blosc2_close_cb) blosc2_stdio_mmap_close;
+  BLOSC2_IO_CB_MMAP.read = (blosc2_read_cb) blosc2_stdio_mmap_read;
+  BLOSC2_IO_CB_MMAP.size = (blosc2_size_cb) blosc2_stdio_mmap_size;
+  BLOSC2_IO_CB_MMAP.write = (blosc2_write_cb) blosc2_stdio_mmap_write;
+  BLOSC2_IO_CB_MMAP.truncate = (blosc2_truncate_cb) blosc2_stdio_mmap_truncate;
+  BLOSC2_IO_CB_MMAP.destroy = (blosc2_destroy_cb) blosc2_stdio_mmap_destroy;
 
   g_ncodecs = 0;
   g_nfilters = 0;
@@ -4403,8 +4443,7 @@ int blosc2_chunk_nans(blosc2_cparams cparams, const int32_t nbytes, void* dest, 
 /* Create a chunk made of repeated values */
 int blosc2_chunk_repeatval(blosc2_cparams cparams, const int32_t nbytes,
                            void* dest, int32_t destsize, const void* repeatval) {
-  uint8_t typesize = cparams.typesize;
-  if (destsize < BLOSC_EXTENDED_HEADER_LENGTH + typesize) {
+  if (destsize < BLOSC_EXTENDED_HEADER_LENGTH + cparams.typesize) {
     BLOSC_TRACE_ERROR("dest buffer is not long enough");
     return BLOSC2_ERROR_DATA;
   }
@@ -4436,17 +4475,17 @@ int blosc2_chunk_repeatval(blosc2_cparams cparams, const int32_t nbytes,
   header.version = BLOSC2_VERSION_FORMAT;
   header.versionlz = BLOSC_BLOSCLZ_VERSION_FORMAT;
   header.flags = BLOSC_DOSHUFFLE | BLOSC_DOBITSHUFFLE;  // extended header
-  header.typesize = (uint8_t)typesize;
+  header.typesize = context->typesize;
   header.nbytes = (int32_t)nbytes;
   header.blocksize = context->blocksize;
-  header.cbytes = BLOSC_EXTENDED_HEADER_LENGTH + (int32_t)typesize;
+  header.cbytes = BLOSC_EXTENDED_HEADER_LENGTH + cparams.typesize;
   header.blosc2_flags = BLOSC2_SPECIAL_VALUE << 4;  // mark chunk as all repeated value
   memcpy((uint8_t *)dest, &header, sizeof(header));
-  memcpy((uint8_t *)dest + sizeof(header), repeatval, typesize);
+  memcpy((uint8_t *)dest + sizeof(header), repeatval, cparams.typesize);
 
   blosc2_free_ctx(context);
 
-  return BLOSC_EXTENDED_HEADER_LENGTH + (uint8_t)typesize;
+  return BLOSC_EXTENDED_HEADER_LENGTH + cparams.typesize;
 }
 
 
@@ -4632,6 +4671,11 @@ int blosc2_register_io_cb(const blosc2_io_cb *io) {
 }
 
 blosc2_io_cb *blosc2_get_io_cb(uint8_t id) {
+  // If g_initlib is not set by blosc2_init() this function will try to read
+  // uninitialized memory. We should therefore always return NULL in that case
+  if (!g_initlib) {
+    return NULL;
+  }
   for (uint64_t i = 0; i < g_nio; ++i) {
     if (g_ios[i].id == id) {
       return &g_ios[i];
@@ -4640,6 +4684,13 @@ blosc2_io_cb *blosc2_get_io_cb(uint8_t id) {
   if (id == BLOSC2_IO_FILESYSTEM) {
     if (_blosc2_register_io_cb(&BLOSC2_IO_CB_DEFAULTS) < 0) {
       BLOSC_TRACE_ERROR("Error registering the default IO API");
+      return NULL;
+    }
+    return blosc2_get_io_cb(id);
+  }
+  else if (id == BLOSC2_IO_FILESYSTEM_MMAP) {
+    if (_blosc2_register_io_cb(&BLOSC2_IO_CB_MMAP) < 0) {
+      BLOSC_TRACE_ERROR("Error registering the mmap IO API");
       return NULL;
     }
     return blosc2_get_io_cb(id);
@@ -4692,3 +4743,23 @@ int blosc2_get_slice_nchunks(blosc2_schunk* schunk, int64_t *start, int64_t *sto
 
   return rc;
 }
+
+blosc2_cparams blosc2_get_blosc2_cparams_defaults(void) {
+  return BLOSC2_CPARAMS_DEFAULTS;
+};
+
+blosc2_dparams blosc2_get_blosc2_dparams_defaults(void) {
+  return BLOSC2_DPARAMS_DEFAULTS;
+};
+
+blosc2_storage blosc2_get_blosc2_storage_defaults(void) {
+  return BLOSC2_STORAGE_DEFAULTS;
+};
+
+blosc2_io blosc2_get_blosc2_io_defaults(void) {
+  return BLOSC2_IO_DEFAULTS;
+};
+
+blosc2_stdio_mmap blosc2_get_blosc2_stdio_mmap_defaults(void) {
+  return BLOSC2_STDIO_MMAP_DEFAULTS;
+};

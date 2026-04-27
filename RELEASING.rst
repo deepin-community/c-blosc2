@@ -9,6 +9,11 @@ Preliminaries
 
 - Check that *VERSION* symbols in include/blosc2.h contains the correct info.
 
+- If API/ABI changes, please increase the minor number (e.g. 2.15 -> 2.16) *and*
+  bump the SOVERSION in blosc/CMakeLists.txt.
+  When in doubt on when SOVERSION should change, see these nice guidelines:
+  https://github.com/conda-forge/c-blosc2-feedstock/issues/62#issuecomment-2049675391
+
 - Commit the changes with::
 
     $ git commit -a -m "Getting ready for release X.Y.Z"

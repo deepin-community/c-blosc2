@@ -8,11 +8,11 @@ Forwarded: https://github.com/Blosc/c-blosc2/issues/605
  blosc/bitshuffle-altivec.c | 1 +
  1 file changed, 1 insertion(+)
 
-diff --git a/blosc/bitshuffle-altivec.c b/blosc/bitshuffle-altivec.c
-index b73a24c..992911c 100644
---- a/blosc/bitshuffle-altivec.c
-+++ b/blosc/bitshuffle-altivec.c
-@@ -33,6 +33,7 @@
+Index: github-c-blosc2-CVE-2025-29476/blosc/bitshuffle-altivec.c
+===================================================================
+--- github-c-blosc2-CVE-2025-29476.orig/blosc/bitshuffle-altivec.c
++++ github-c-blosc2-CVE-2025-29476/blosc/bitshuffle-altivec.c
+@@ -34,6 +34,7 @@
  #include <altivec.h>
  
  #include <stdint.h>
